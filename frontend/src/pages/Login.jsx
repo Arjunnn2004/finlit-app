@@ -40,55 +40,55 @@ export default function Login(){
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${theme.bg}`} style={{
+    <div className={`min-h-screen flex items-center justify-center ${theme.bg} px-4 sm:px-6 lg:px-8`} style={{
       backgroundImage: `
         radial-gradient(circle at 20% 20%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
         radial-gradient(circle at 80% 80%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
         radial-gradient(circle at 40% 40%, rgba(120, 198, 121, 0.3) 0%, transparent 50%)
       `
     }}>
-      <div className={`w-full max-w-md p-8 ${theme.cardBg} rounded-2xl ${theme.shadow} border ${theme.border} backdrop-blur-sm bg-opacity-95`}>
+      <div className={`w-full max-w-md p-6 sm:p-8 ${theme.cardBg} rounded-2xl ${theme.shadow} border ${theme.border} backdrop-blur-sm bg-opacity-95`}>
         {/* Gamified Header */}
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🎮</div>
-          <h1 className={`text-4xl font-bold mb-2 ${theme.text} bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent`}>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="text-5xl sm:text-6xl mb-4">🎮</div>
+          <h1 className={`text-3xl sm:text-4xl font-bold mb-2 ${theme.text} bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent`}>
             FinLit Quest
           </h1>
-          <p className={`${theme.textSecondary} text-lg`}>
+          <p className={`${theme.textSecondary} text-base sm:text-lg`}>
             Your Financial Adventure Awaits!
           </p>
           
           {/* Feature Highlights */}
-          <div className="grid grid-cols-3 gap-3 mt-6">
-            <div className={`${theme.cardBg} p-3 rounded-lg border ${theme.border}`}>
-              <div className="text-2xl mb-1">🏆</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-4 sm:mt-6">
+            <div className={`${theme.cardBg} p-2 sm:p-3 rounded-lg border ${theme.border}`}>
+              <div className="text-xl sm:text-2xl mb-1">🏆</div>
               <div className={`text-xs ${theme.textSecondary}`}>Earn XP</div>
             </div>
-            <div className={`${theme.cardBg} p-3 rounded-lg border ${theme.border}`}>
-              <div className="text-2xl mb-1">🎯</div>
+            <div className={`${theme.cardBg} p-2 sm:p-3 rounded-lg border ${theme.border}`}>
+              <div className="text-xl sm:text-2xl mb-1">🎯</div>
               <div className={`text-xs ${theme.textSecondary}`}>Achievements</div>
             </div>
-            <div className={`${theme.cardBg} p-3 rounded-lg border ${theme.border}`}>
-              <div className="text-2xl mb-1">🪙</div>
+            <div className={`${theme.cardBg} p-2 sm:p-3 rounded-lg border ${theme.border}`}>
+              <div className="text-xl sm:text-2xl mb-1">🪙</div>
               <div className={`text-xs ${theme.textSecondary}`}>Collect Coins</div>
             </div>
           </div>
         </div>
 
         {/* Welcome Message */}
-        <div className="text-center mb-8">
-          <h3 className={`text-xl font-semibold ${theme.text} mb-2`}>
+        <div className="text-center mb-6 sm:mb-8">
+          <h3 className={`text-lg sm:text-xl font-semibold ${theme.text} mb-2`}>
             Ready to Level Up Your Finances? 🚀
           </h3>
-          <p className={`${theme.textSecondary}`}>
+          <p className={`${theme.textSecondary} text-sm sm:text-base`}>
             Track expenses, unlock achievements, and master your money management skills!
           </p>
         </div>
         
         {error && (
-          <div className="mb-6 p-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg flex items-center gap-2">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg flex items-center gap-2">
             <span className="text-lg">⚠️</span>
-            <span>{error}</span>
+            <span className="text-sm sm:text-base">{error}</span>
           </div>
         )}
         
@@ -96,7 +96,7 @@ export default function Login(){
         <button 
           onClick={login} 
           disabled={loading}
-          className={`w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-3 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl`}
+          className={`w-full py-3 sm:py-4 px-4 sm:px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 sm:gap-3 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl text-sm sm:text-base`}
         >
           {loading ? (
             <>
