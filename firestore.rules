@@ -4,14 +4,31 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Expenses collection - users can only access their own expenses
     match /expenses/{expenseId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
     }
     
     // Users collection - for leaderboard and user profiles
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // User stats collection - for gamification data
+    match /userStats/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Game stats collection - for mini-game statistics
+    match /gameStats/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Coin history collection - for tracking coin transactions
+    match /coinHistory/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

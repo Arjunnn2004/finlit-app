@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import { addDoc, collection, serverTimestamp, query, where, orderBy, limit, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { getAuth } from 'firebase/auth';
@@ -12,13 +12,13 @@ export default function ExpenseForm(){
   const [recentExpenses, setRecentExpenses] = useState([]);
   const [loadingExpenses, setLoadingExpenses] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
-  const [priority, setPriority] = useState('medium'); // For ML model
-  const [spendingGoal, setSpendingGoal] = useState(''); // For ML model
+  const [mlPreview, setMlPreview] = useState(null); // ML prediction preview
+  const [loadingPreview, setLoadingPreview] = useState(false); // Loading state for preview
   const auth = getAuth();
   const { theme } = useTheme();
 
   // Enhanced categories for better ML analysis
-  const categories = [
+  const categories = useMemo(() => [
     { value: 'food', label: 'Food & Dining', icon: '🍽️', healthy: true },
     { value: 'transportation', label: 'Transportation', icon: '🚗', healthy: true },
     { value: 'utilities', label: 'Utilities & Bills', icon: '⚡', healthy: true },
@@ -31,7 +31,7 @@ export default function ExpenseForm(){
     { value: 'subscriptions', label: 'Subscriptions', icon: '📱', healthy: false },
     { value: 'impulse', label: 'Impulse Purchases', icon: '💸', healthy: false },
     { value: 'other', label: 'Other', icon: '📋', healthy: true }
-  ];
+  ], []);
   
   // Add a safety timeout for loading state
   useEffect(() => {
@@ -165,7 +165,103 @@ export default function ExpenseForm(){
       setDeletingId(null);
     }
   };
-  
+
+  // ML Coin Prediction Function
+  const getMLCoinPrediction = useCallback(async (expenseData) => {
+    try {
+      // Calculate user history metrics
+      const userExpenses = recentExpenses.filter(expense => expense.userId === auth.currentUser?.uid);
+      
+      // Calculate spending velocity (expenses per day over last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const recentUserExpenses = userExpenses.filter(expense => {
+        const expenseDate = expense.timestamp?.toDate?.() || new Date(expense.createdAt);
+        return expenseDate >= thirtyDaysAgo;
+      });
+      const spendingVelocity = recentUserExpenses.length / 30;
+      
+      // Calculate category frequency
+      const categoryCount = userExpenses.filter(expense => expense.category === expenseData.category).length;
+      const categoryFrequency = userExpenses.length > 0 ? categoryCount / userExpenses.length : 0.5;
+      
+      // Calculate budget ratio (assuming a monthly budget of $2000)
+      const monthlyBudget = 2000;
+      const currentMonthExpenses = userExpenses.filter(expense => {
+        const expenseDate = expense.timestamp?.toDate?.() || new Date(expense.createdAt);
+        const now = new Date();
+        return expenseDate.getMonth() === now.getMonth() && expenseDate.getFullYear() === now.getFullYear();
+      });
+      const currentMonthTotal = currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+      const budgetRatio = (currentMonthTotal + expenseData.amount) / monthlyBudget;
+
+      const response = await fetch('http://localhost:5000/predict-coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(expenseData.amount),
+          category: expenseData.category,
+          timestamp: new Date().toISOString(),
+          spending_velocity: spendingVelocity,
+          category_frequency: categoryFrequency,
+          budget_ratio: budgetRatio
+        })
+      });
+      
+      if (response.ok) {
+        const prediction = await response.json();
+        console.log('ML Prediction:', prediction);
+        return prediction;
+      }
+    } catch (error) {
+      console.error('ML prediction error:', error);
+    }
+    
+    // Fallback to basic calculation
+    const categoryData = categories.find(cat => cat.value === expenseData.category);
+    const baseCoins = categoryData?.healthy ? 8 : 5;
+    const amountPenalty = expenseData.amount > 100 ? -2 : 0;
+    const finalCoins = Math.max(1, baseCoins + amountPenalty);
+    
+    return { coins: finalCoins, confidence: 'low', factors: { fallback: true } };
+  }, [recentExpenses, auth.currentUser, categories]);
+
+  // Get ML prediction preview when user types
+  const getMLPreview = useCallback(async () => {
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      setMlPreview(null);
+      return;
+    }
+
+    setLoadingPreview(true);
+    try {
+      const prediction = await getMLCoinPrediction({
+        amount: parseFloat(amount),
+        category,
+        description: description.trim()
+      });
+      setMlPreview(prediction);
+    } catch (error) {
+      console.error('Preview error:', error);
+      setMlPreview(null);
+    } finally {
+      setLoadingPreview(false);
+    }
+  }, [amount, category, description, getMLCoinPrediction]);
+
+  // Debounced preview update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (amount && parseFloat(amount) > 0) {
+        getMLPreview();
+      } else {
+        setMlPreview(null);
+      }
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [amount, category, description, getMLPreview]);
+
   const addExpense = async (e) => {
     e.preventDefault();
     
@@ -198,18 +294,31 @@ export default function ExpenseForm(){
         
         console.log('Adding expense data:', expenseData); // Debug log
         
+        // Get ML coin prediction before saving
+        const mlPrediction = await getMLCoinPrediction({
+          amount: parseFloat(amount),
+          category,
+          description: description.trim()
+        });
+        
+        // Add ML prediction data to expense
+        expenseData.mlCoins = mlPrediction.coins;
+        expenseData.mlConfidence = mlPrediction.confidence;
+        expenseData.mlFactors = mlPrediction.factors;
+        
         // Use a simpler approach to avoid concurrent operation issues
         const docRef = await addDoc(collection(db, 'expenses'), expenseData);
         
         console.log('Expense added successfully with ID:', docRef.id); // Debug log
+        console.log('ML Prediction applied:', mlPrediction); // Debug log
         
         // Reset form on success
         setAmount('');
         setCategory('food');
         setDescription('');
         
-        // Show success message
-        alert('Expense added successfully!');
+        // Show success message with ML prediction info
+        alert(`Expense added successfully! 🎉\nCoins earned: ${mlPrediction.coins}\nConfidence: ${mlPrediction.confidence}`);
         return true;
         
       } catch (error) {
@@ -256,24 +365,24 @@ export default function ExpenseForm(){
   return (
     <div>
       {/* Gamified Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-0">
-        <h2 className={`text-lg sm:text-xl font-semibold ${theme.text} flex items-center gap-2 sm:gap-3`}>
-          <span className="text-xl sm:text-2xl">💸</span>
-          <span className="text-sm sm:text-base">Add Expense</span>
-          <span className="text-xs sm:text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white px-2 py-1 rounded-full">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className={`text-xl font-semibold ${theme.text} flex items-center gap-3`}>
+          <span className="text-2xl">💸</span>
+          Add Expense
+          <span className="text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white px-2 py-1 rounded-full">
             +10 XP
           </span>
         </h2>
         <div className="flex items-center gap-2">
-          <span className="text-yellow-500 text-base sm:text-lg">🎯</span>
-          <span className={`${theme.textSecondary} text-xs sm:text-sm`}>Track & Earn Rewards!</span>
+          <span className="text-yellow-500 text-lg">🎯</span>
+          <span className={`${theme.textSecondary} text-sm`}>Track & Earn Rewards!</span>
         </div>
       </div>
 
-      <form onSubmit={addExpense} className="space-y-3 sm:space-y-4">
+      <form onSubmit={addExpense} className="space-y-4">
         <div>
           <label className={`block text-sm font-medium ${theme.text} mb-2 flex items-center gap-2`}>
-            <span className="text-base sm:text-lg">💰</span>
+            <span className="text-lg">💰</span>
             Amount
           </label>
           <input 
@@ -282,14 +391,14 @@ export default function ExpenseForm(){
             value={amount} 
             onChange={e=>setAmount(e.target.value)}
             disabled={loading}
-            className={`w-full p-2 sm:p-3 border ${theme.border} rounded-lg ${theme.cardBg} ${theme.text} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base`}
+            className={`w-full p-3 border ${theme.border} rounded-lg ${theme.cardBg} ${theme.text} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
             placeholder="e.g. 12.50" 
             required 
           />
         </div>
         <div>
           <label className={`block text-sm font-medium ${theme.text} mb-2 flex items-center gap-2`}>
-            <span className="text-base sm:text-lg">📝</span>
+            <span className="text-lg">📝</span>
             Description (Optional)
             <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full">+5 XP</span>
           </label>
@@ -298,21 +407,21 @@ export default function ExpenseForm(){
             value={description} 
             onChange={e=>setDescription(e.target.value)}
             disabled={loading}
-            className={`w-full p-2 sm:p-3 border ${theme.border} rounded-lg ${theme.cardBg} ${theme.text} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base`}
+            className={`w-full p-3 border ${theme.border} rounded-lg ${theme.cardBg} ${theme.text} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
             placeholder="e.g. Lunch at restaurant" 
             maxLength={100}
           />
         </div>
         <div>
           <label className={`block text-sm font-medium ${theme.text} mb-2 flex items-center gap-2`}>
-            <span className="text-base sm:text-lg">🏷️</span>
+            <span className="text-lg">🏷️</span>
             Category
           </label>
           <select 
             value={category} 
             onChange={e=>setCategory(e.target.value)}
             disabled={loading}
-            className={`w-full p-2 sm:p-3 border ${theme.border} rounded-lg ${theme.cardBg} ${theme.text} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base`}
+            className={`w-full p-3 border ${theme.border} rounded-lg ${theme.cardBg} ${theme.text} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <option value="food">🍕 Food & Dining</option>
             <option value="travel">✈️ Travel & Transport</option>
@@ -322,61 +431,126 @@ export default function ExpenseForm(){
           </select>
         </div>
         
+        {/* ML Coin Prediction Preview */}
+        {mlPreview && mlPreview.coins !== undefined && (
+          <div className={`${theme.cardBg} border-2 ${theme.border} rounded-xl p-4 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/30 dark:to-blue-900/30 shadow-lg`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🤖</span>
+                <h4 className={`font-bold text-sm ${theme.text}`}>AI Coin Prediction</h4>
+                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
+                  ML Powered
+                </span>
+              </div>
+              {loadingPreview && (
+                <svg className="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-yellow-100 dark:bg-yellow-900/50 px-3 py-2 rounded-lg">
+                  <span className="text-lg">🪙</span>
+                  <span className={`font-bold text-lg ${theme.text}`}>
+                    {mlPreview.coins || 0}
+                  </span>
+                  <span className={`text-sm ${theme.textSecondary}`}>coins</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-green-600 dark:text-green-400">●</span>
+                  <span className={`${theme.textSecondary}`}>
+                    {mlPreview.confidence || 'Medium'} confidence
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className={`text-xs ${theme.textSecondary}`}>Based on:</div>
+                <div className={`text-xs font-medium ${theme.text}`}>
+                  {(() => {
+                    if (Array.isArray(mlPreview.factors)) {
+                      return mlPreview.factors.slice(0, 2).join(', ');
+                    } else if (mlPreview.factors && typeof mlPreview.factors === 'object') {
+                      const factorKeys = Object.keys(mlPreview.factors);
+                      return factorKeys.slice(0, 2).map(key => 
+                        key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                      ).join(', ');
+                    } else {
+                      return 'Amount & category';
+                    }
+                  })()}
+                </div>
+              </div>
+            </div>
+            {mlPreview.tip && (
+              <div className="mt-3 pt-3 border-t border-dashed border-gray-300 dark:border-gray-600">
+                <div className="flex items-start gap-2">
+                  <span className="text-sm">💡</span>
+                  <span className={`text-xs ${theme.textSecondary}`}>
+                    {mlPreview.tip}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* Gamified Submit Button */}
         <button 
           type="submit"
           disabled={loading}
-          className={`w-full px-3 sm:px-4 py-3 sm:py-4 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95 text-sm sm:text-base`}
+          className={`w-full px-4 py-4 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95`}
         >
           {loading ? (
             <>
-              <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span className="text-base sm:text-lg">⚡</span>
-              <span className="text-sm sm:text-base">Processing...</span>
+              <span className="text-lg">⚡</span>
+              Processing...
             </>
           ) : (
             <>
-              <span className="text-base sm:text-lg">🚀</span>
-              <span className="text-sm sm:text-base">Track Expense & Earn XP</span>
-              <span className="text-base sm:text-lg">🎁</span>
+              <span className="text-lg">🚀</span>
+              Track Expense & Earn XP
+              <span className="text-lg">🎁</span>
             </>
           )}
         </button>
       </form>
 
       {/* Recent Expenses Section */}
-      <div className="mt-6 sm:mt-8">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-          <h3 className={`text-base sm:text-lg font-semibold ${theme.text} flex items-center gap-2`}>
-            <span className="text-xl sm:text-2xl">📊</span>
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={`text-lg font-semibold ${theme.text} flex items-center gap-2`}>
+            <span className="text-2xl">📊</span>
             Recent Adventures
           </h3>
           <div className="flex items-center gap-2">
-            <span className="text-xs sm:text-sm bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1 rounded-full">
+            <span className="text-sm bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1 rounded-full">
               🎮 Track History
             </span>
           </div>
         </div>
         
         {loadingExpenses ? (
-          <div className="flex items-center justify-center py-6 sm:py-8">
+          <div className="flex items-center justify-center py-8">
             <div className="text-center">
-              <svg className="animate-spin h-6 w-6 sm:h-8 sm:w-8 text-blue-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-8 w-8 text-blue-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span className={`${theme.textSecondary} text-xs sm:text-sm`}>Loading your expense journey...</span>
+              <span className={`${theme.textSecondary} text-sm`}>Loading your expense journey...</span>
             </div>
           </div>
         ) : recentExpenses.length === 0 ? (
-          <div className={`text-center py-8 sm:py-12 ${theme.cardBg} rounded-xl border-2 border-dashed ${theme.border}`}>
-            <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">🎯</div>
-            <h4 className={`${theme.text} text-base sm:text-lg font-medium mb-2`}>Ready for Your First Quest?</h4>
-            <p className={`${theme.textSecondary} mb-3 sm:mb-4 text-sm sm:text-base px-4`}>Start tracking expenses to unlock achievements and earn rewards!</p>
-            <div className="flex flex-wrap justify-center gap-3 sm:gap-4 text-xs sm:text-sm">
+          <div className={`text-center py-12 ${theme.cardBg} rounded-xl border-2 border-dashed ${theme.border}`}>
+            <div className="text-6xl mb-4">🎯</div>
+            <h4 className={`${theme.text} text-lg font-medium mb-2`}>Ready for Your First Quest?</h4>
+            <p className={`${theme.textSecondary} mb-4`}>Start tracking expenses to unlock achievements and earn rewards!</p>
+            <div className="flex justify-center gap-4 text-sm">
               <div className="flex items-center gap-1">
                 <span>⭐</span>
                 <span className={theme.textSecondary}>Earn XP</span>
@@ -392,7 +566,7 @@ export default function ExpenseForm(){
             </div>
           </div>
         ) : (
-          <div className="space-y-3 sm:space-y-6">{recentExpenses.map((expense, index) => {
+          <div className="space-y-6">{recentExpenses.map((expense, index) => {
               const isDeleting = deletingId === expense.id;
               
               // Format date
@@ -421,22 +595,22 @@ export default function ExpenseForm(){
               return (
                 <div
                   key={expense.id}
-                  className={`${theme.cardBg} border-2 ${theme.border} ${categoryInfo.bgAccent} border-l-4 sm:border-l-8 rounded-r-xl sm:rounded-r-2xl rounded-l-lg sm:rounded-l-xl p-3 sm:p-6 transition-all duration-500 ${
+                  className={`${theme.cardBg} border-2 ${theme.border} ${categoryInfo.bgAccent} border-l-8 rounded-r-2xl rounded-l-xl p-6 transition-all duration-500 ${
                     isDeleting 
                       ? 'opacity-50 scale-95 blur-sm' 
-                      : `hover:shadow-2xl hover:shadow-${categoryInfo.shadow} hover:scale-[1.02] sm:hover:scale-[1.05] hover:border-l-[6px] sm:hover:border-l-[12px] hover:-translate-y-1 sm:hover:-translate-y-2`
+                      : `hover:shadow-2xl hover:shadow-${categoryInfo.shadow} hover:scale-[1.05] hover:border-l-[12px] hover:-translate-y-2`
                   } relative group bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900`}
                 >
                   {/* Header Row */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                    <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-bold text-xs sm:text-sm shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1.5 rounded-full font-bold text-sm shadow-lg">
                           #{index + 1}
                         </div>
-                        <div className={`${categoryInfo.color} px-3 sm:px-4 py-2 sm:py-2.5 rounded-full flex items-center gap-2 sm:gap-3 shadow-lg border border-white/50 dark:border-gray-700/50`}>
-                          <span className="text-lg sm:text-2xl drop-shadow-sm">{categoryInfo.emoji}</span>
-                          <span className={`font-bold text-xs sm:text-sm ${categoryInfo.textColor} tracking-wide`}>
+                        <div className={`${categoryInfo.color} px-4 py-2.5 rounded-full flex items-center gap-3 shadow-lg border border-white/50 dark:border-gray-700/50`}>
+                          <span className="text-2xl drop-shadow-sm">{categoryInfo.emoji}</span>
+                          <span className={`font-bold text-sm ${categoryInfo.textColor} tracking-wide`}>
                             {categoryInfo.name}
                           </span>
                         </div>
@@ -444,29 +618,29 @@ export default function ExpenseForm(){
                     </div>
                     
                     {/* Amount - Prominently displayed */}
-                    <div className="text-right w-full sm:w-auto">
-                      <span className={`font-black text-xl sm:text-3xl bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent drop-shadow-lg`}>
+                    <div className="text-right">
+                      <span className={`font-black text-3xl bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent drop-shadow-lg`}>
                         ${expense.amount?.toFixed(2) || '0.00'}
                       </span>
                     </div>
                   </div>
 
                   {/* Content Row */}
-                  <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-6">
-                    <div className="flex-1 min-w-0 w-full">
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="flex-1 min-w-0">
                       {/* Date and Description */}
-                      <div className="space-y-2 sm:space-y-3">
-                        <div className="flex items-center gap-2 sm:gap-3 bg-blue-50 dark:bg-blue-900/30 px-3 sm:px-4 py-2 rounded-xl border border-blue-200 dark:border-blue-700">
-                          <span className="text-base sm:text-xl">📅</span>
-                          <span className={`text-xs sm:text-sm font-semibold text-blue-800 dark:text-blue-200`}>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-xl border border-blue-200 dark:border-blue-700">
+                          <span className="text-xl">📅</span>
+                          <span className={`text-sm font-semibold text-blue-800 dark:text-blue-200`}>
                             {dateDisplay}
                           </span>
                         </div>
                         
                         {expense.description && (
-                          <div className="flex items-start gap-2 sm:gap-3 bg-purple-50 dark:bg-purple-900/30 px-3 sm:px-4 py-2 sm:py-3 rounded-xl border border-purple-200 dark:border-purple-700">
-                            <span className="text-base sm:text-xl mt-0.5">💬</span>
-                            <p className={`text-xs sm:text-sm text-purple-800 dark:text-purple-200 leading-relaxed font-medium`}>
+                          <div className="flex items-start gap-3 bg-purple-50 dark:bg-purple-900/30 px-4 py-3 rounded-xl border border-purple-200 dark:border-purple-700">
+                            <span className="text-xl mt-0.5">💬</span>
+                            <p className={`text-sm text-purple-800 dark:text-purple-200 leading-relaxed font-medium`}>
                               {expense.description}
                             </p>
                           </div>
@@ -479,21 +653,21 @@ export default function ExpenseForm(){
                       <button
                         onClick={() => deleteExpense(expense.id, expense.description || `$${expense.amount} ${expense.category}`)}
                         disabled={isDeleting}
-                        className={`px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-lg sm:rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 sm:gap-3 group/btn shadow-lg hover:shadow-red-300 dark:hover:shadow-red-800 sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 transform`}
+                        className={`px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 group/btn shadow-lg hover:shadow-red-300 dark:hover:shadow-red-800 opacity-0 group-hover:opacity-100 hover:scale-110 transform`}
                         title="Remove this expense"
                       >
                         {isDeleting ? (
                           <>
-                            <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24">
+                            <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <span className="text-xs sm:text-sm font-bold">Removing...</span>
+                            <span className="text-sm font-bold">Removing...</span>
                           </>
                         ) : (
                           <>
-                            <span className="text-lg sm:text-xl group-hover/btn:scale-125 transition-transform duration-200">🗑️</span>
-                            <span className="text-xs sm:text-sm font-bold tracking-wide">DELETE</span>
+                            <span className="text-xl group-hover/btn:scale-125 transition-transform duration-200">🗑️</span>
+                            <span className="text-sm font-bold tracking-wide">DELETE</span>
                           </>
                         )}
                       </button>
@@ -501,22 +675,22 @@ export default function ExpenseForm(){
                   </div>
 
                   {/* Rewards Footer */}
-                  <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t-2 border-dashed border-gray-300 dark:border-gray-600">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-6">
-                        <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/40 dark:to-blue-800/40 px-2 sm:px-3 py-1 sm:py-2 rounded-full shadow-sm border border-blue-200 dark:border-blue-700">
-                          <span className="text-base sm:text-xl">⭐</span>
-                          <span className={`text-xs sm:text-sm font-bold text-blue-800 dark:text-blue-200`}>+10 XP</span>
+                  <div className="mt-6 pt-4 border-t-2 border-dashed border-gray-300 dark:border-gray-600">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/40 dark:to-blue-800/40 px-3 py-2 rounded-full shadow-sm border border-blue-200 dark:border-blue-700">
+                          <span className="text-xl">⭐</span>
+                          <span className={`text-sm font-bold text-blue-800 dark:text-blue-200`}>+10 XP</span>
                         </div>
                         {expense.description && (
-                          <div className="flex items-center gap-2 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/40 dark:to-green-800/40 px-2 sm:px-3 py-1 sm:py-2 rounded-full shadow-sm border border-green-200 dark:border-green-700">
-                            <span className="text-base sm:text-xl">🎯</span>
-                            <span className={`text-xs sm:text-sm font-bold text-green-800 dark:text-green-200`}>+5 XP bonus</span>
+                          <div className="flex items-center gap-2 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/40 dark:to-green-800/40 px-3 py-2 rounded-full shadow-sm border border-green-200 dark:border-green-700">
+                            <span className="text-xl">🎯</span>
+                            <span className={`text-sm font-bold text-green-800 dark:text-green-200`}>+5 XP bonus</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/40 dark:to-yellow-800/40 px-2 sm:px-3 py-1 sm:py-2 rounded-full shadow-sm border border-yellow-200 dark:border-yellow-700">
-                          <span className="text-base sm:text-xl">🪙</span>
-                          <span className={`text-xs sm:text-sm font-bold text-yellow-800 dark:text-yellow-200`}>+2 coins</span>
+                        <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/40 dark:to-yellow-800/40 px-3 py-2 rounded-full shadow-sm border border-yellow-200 dark:border-yellow-700">
+                          <span className="text-xl">🪙</span>
+                          <span className={`text-sm font-bold text-yellow-800 dark:text-yellow-200`}>+2 coins</span>
                         </div>
                       </div>
                       
