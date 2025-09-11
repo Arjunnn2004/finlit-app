@@ -1,0 +1,1 @@
+{"version": "1.0", "features": ["amount", "category", "hour", "day_of_week", "month", "spending_velocity", "category_frequency", "budget_ratio"], "categories": ["education", "entertainment", "food", "healthcare", "other", "savings", "shopping", "transportation", "travel", "utilities"]}
