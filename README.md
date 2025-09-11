@@ -1,17 +1,26 @@
-# 🎮 FinQuest - Gamified Expense Tracker
+# 🎮 FinQuest - AI-Powered Gamified Expense Tracker
 
 [![React](https://img.shields.io/badge/React-19.1.1-61DAFB?style=for-the-badge&logo=react)](https://reactjs.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-12.2.1-FFCA28?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-FF6F00?style=for-the-badge&logo=tensorflow)](https://tensorflow.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.1.13-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 [![Vite](https://img.shields.io/badge/Vite-7.1.2-646CFF?style=for-the-badge&logo=vite)](https://vitejs.dev/)
 
-**Turn your expense tracking into an epic adventure!** 🚀
+**Turn your expense tracking into an epic AI-powered adventure!** 🚀🤖
 
-FinQuest transforms the mundane task of expense tracking into an engaging, gamified experience. Earn XP, unlock achievements, collect coins, and level up while managing your finances responsibly.
+FinQuest transforms the mundane task of expense tracking into an engaging, gamified experience with intelligent ML predictions. Earn XP, unlock achievements, collect coins predicted by AI, and level up while managing your finances responsibly.
 
-![FinQuest Banner](https://via.placeholder.com/800x300/6366f1/ffffff?text=FinQuest+-+Gamified+Expense+Tracker)
+![FinQuest Banner](https://via.placeholder.com/800x300/6366f1/ffffff?text=FinQuest+-+AI+Powered+Expense+Tracker)
 
 ## ✨ Features
+
+### 🤖 AI & Machine Learning
+- **Smart Coin Prediction** - AI predicts coins earned before expense submission
+- **TensorFlow Neural Network** - Trained model on spending behavior patterns
+- **Real-time ML Preview** - See predicted rewards as you type
+- **Intelligent Insights** - ML-powered spending analysis and recommendations
+- **Confidence Scoring** - AI confidence levels for each prediction
+- **Fallback System** - Robust rule-based backup when ML model unavailable
 
 ### 🎯 Core Functionality
 - **Smart Expense Tracking** - Add expenses with categories, amounts, and descriptions
@@ -47,28 +56,36 @@ FinQuest transforms the mundane task of expense tracking into an engaging, gamif
 - Node.js 18+ 
 - npm or yarn
 - Firebase project setup
+- Python 3.8+ (for ML API)
+- TensorFlow 2.x (for AI features)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd Minor
+   cd finlit-app
    ```
 
-2. **Install dependencies**
+2. **Install frontend dependencies**
    ```bash
    cd frontend
    npm install
    ```
 
-3. **Firebase Setup**
+3. **Setup ML API (Optional - for AI features)**
+   ```bash
+   cd ../ml-api
+   pip install flask flask-cors tensorflow scikit-learn joblib numpy pandas
+   ```
+
+4. **Firebase Setup**
    - Create a Firebase project at [Firebase Console](https://console.firebase.google.com)
    - Enable Authentication (Email/Password)
    - Create Firestore Database
    - Copy your Firebase config to `frontend/src/firebaseConfig.js`
 
-4. **Configure Firebase Config**
+5. **Configure Firebase Config**
    ```javascript
    // frontend/src/firebaseConfig.js
    const firebaseConfig = {
@@ -81,12 +98,20 @@ FinQuest transforms the mundane task of expense tracking into an engaging, gamif
    };
    ```
 
-5. **Start the development server**
+6. **Start the ML API server (Optional)**
    ```bash
+   cd ml-api
+   python app.py
+   # Server will run on http://127.0.0.1:5000
+   ```
+
+7. **Start the frontend development server**
+   ```bash
+   cd frontend
    npm run dev
    ```
 
-6. **Open your browser**
+8. **Open your browser**
    ```
    http://localhost:5173
    ```
@@ -94,12 +119,12 @@ FinQuest transforms the mundane task of expense tracking into an engaging, gamif
 ## 🏗️ Project Structure
 
 ```
-Minor/
+finlit-app/
 ├── 📁 frontend/                 # React frontend application
 │   ├── 📁 src/
 │   │   ├── 📁 components/       # Reusable React components
 │   │   │   ├── ChartView.jsx    # Data visualization component
-│   │   │   ├── ExpenseForm.jsx  # Expense input and list
+│   │   │   ├── ExpenseForm.jsx  # Expense input with ML integration
 │   │   │   ├── GameStats.jsx    # Gamification dashboard
 │   │   │   ├── LeaderBoard.jsx  # User rankings
 │   │   │   └── TopNav.jsx       # Navigation header
@@ -113,12 +138,67 @@ Minor/
 │   │   └── main.jsx            # Application entry point
 │   ├── package.json            # Dependencies and scripts
 │   └── vite.config.js          # Vite configuration
+├── 📁 ml-api/                  # Machine Learning API Server
+│   ├── app.py                  # Flask API with TensorFlow integration
+│   └── requirements.txt        # Python dependencies
+├── 📁 ml_model/                # ML Model Training & Data
+│   ├── train_spending_model.py # TensorFlow model training script
+│   ├── finlit_expenses_dataset.csv # Training data (1000+ records)
+│   └── 📁 ml_model/           # Generated model files
+│       ├── spending_model.h5   # Trained TensorFlow model
+│       ├── scaler.pkl          # Feature scaler
+│       └── category_encoder.pkl # Category encoder
 ├── 📁 functions/               # Firebase Cloud Functions
 ├── 📁 dataconnect/            # Firebase Data Connect
 ├── firestore.rules            # Firestore security rules
 ├── firestore.indexes.json     # Database indexes
 └── README.md                  # This file
 ```
+
+## 🤖 AI & Machine Learning Features
+
+### TensorFlow Neural Network
+- **Model Architecture**: Multi-layer neural network trained on spending behavior
+- **Features**: Amount, category, time patterns, spending velocity, budget ratios
+- **Training Data**: 1000+ expense records with behavioral patterns
+- **Performance**: Test Loss: 4.55, Test MAE: 1.71
+
+### Real-time ML Predictions
+- **Live Preview**: AI predicts coins as users type expense details
+- **Confidence Scoring**: Shows prediction confidence (High/Medium/Low)
+- **Factor Analysis**: Displays reasoning behind predictions
+- **Debounced API**: Smart 500ms delay to prevent excessive API calls
+
+### ML API Architecture
+```python
+# Flask API Structure
+/predict-coins    # Main prediction endpoint
+/health          # API health check
+/test            # Testing endpoint
+/categories      # Available categories
+```
+
+### Prediction Algorithm
+```python
+# Feature Engineering
+features = [
+    amount,                    # Expense amount
+    category_encoded,          # One-hot encoded category
+    hour_of_day,              # Time-based patterns
+    day_of_week,              # Weekly patterns
+    spending_velocity,         # Spending frequency
+    category_frequency,        # Category usage patterns
+    budget_ratio              # Budget adherence
+]
+
+# Neural Network Prediction
+coins = model.predict(scaler.transform([features]))
+```
+
+### Fallback System
+- **Rule-based Backup**: When ML model fails, uses intelligent rules
+- **Graceful Degradation**: Seamless fallback without user disruption
+- **Health Monitoring**: API health checks ensure system reliability
 
 ## 🎮 Gamification Features
 
@@ -140,8 +220,10 @@ Minor/
 | 💰 Smart Saver | Save $100 in a month | 10 XP + 50 Coins |
 
 ### Coin Economy
-- **Expense Logging**: +2 coins per expense
+- **AI-Predicted Coins**: ML model predicts coin rewards before submission
+- **Base Rewards**: +2 coins per expense (with AI adjustments)
 - **Achievement Unlocks**: +50 coins per achievement
+- **Smart Adjustments**: AI considers spending patterns and categories
 - **Future Features**: Coin shop for themes and rewards
 
 ## 🎨 Theme System
@@ -183,6 +265,14 @@ The application supports both light and dark themes with:
 - **Recharts 3.2.0**: Composable charting library
 - **React Router DOM 7.8.2**: Client-side routing
 
+### AI & Machine Learning
+- **TensorFlow 2.x**: Neural network training and inference
+- **Python 3.8+**: ML API backend runtime
+- **Flask**: Lightweight API framework
+- **NumPy & Pandas**: Data processing and manipulation
+- **Scikit-learn**: Data preprocessing and utilities
+- **Joblib**: Model serialization and loading
+
 ### Backend & Database
 - **Firebase 12.2.1**: Full backend-as-a-service
 - **Firestore**: NoSQL document database
@@ -200,15 +290,19 @@ The application supports both light and dark themes with:
 ### Available Scripts
 
 ```bash
-# Development
+# Frontend Development
 npm run dev          # Start development server
-
-# Building
 npm run build        # Build for production
 npm run preview      # Preview production build
-
-# Code Quality
 npm run lint         # Run ESLint
+
+# ML API Development
+cd ml-api
+python app.py        # Start ML API server (port 5000)
+
+# Model Training
+cd ml_model
+python train_spending_model.py  # Train new ML model
 ```
 
 ### Development Workflow
@@ -217,7 +311,8 @@ npm run lint         # Run ESLint
 2. **Styling**: Use Tailwind CSS classes for consistent styling
 3. **State Management**: Use React hooks for local state
 4. **Firebase Integration**: Use Firebase SDK for backend operations
-5. **Testing**: Test components in isolation and integration
+5. **ML Integration**: Use ML API endpoints for AI predictions
+6. **Testing**: Test components in isolation and integration
 
 ### Adding New Features
 
@@ -225,6 +320,7 @@ npm run lint         # Run ESLint
 2. **New Category**: Update category data in `ExpenseForm.jsx`
 3. **New Chart Type**: Extend `ChartView.jsx` with Recharts components
 4. **Theme Colors**: Update theme configuration in `useTheme.js`
+5. **ML Features**: Extend `ml-api/app.py` for new prediction types
 
 ## 📱 Mobile Responsiveness
 
@@ -250,7 +346,7 @@ The application is fully responsive with:
 
 ## 🚀 Deployment
 
-### Firebase Hosting
+### Frontend Deployment (Firebase Hosting)
 ```bash
 # Install Firebase CLI
 npm install -g firebase-tools
@@ -266,12 +362,35 @@ npm run build
 firebase deploy
 ```
 
+### ML API Deployment
+```bash
+# For production deployment, consider:
+# - Docker containerization
+# - Cloud services (AWS, GCP, Azure)
+# - Environment variables for model paths
+# - Load balancing for high traffic
+
+# Example Docker deployment
+docker build -t finlit-ml-api .
+docker run -p 5000:5000 finlit-ml-api
+```
+
 ### Environment Variables
-Create `.env` file for sensitive configuration:
+Create `.env` files for sensitive configuration:
+
+**Frontend (.env)**:
 ```env
 VITE_FIREBASE_API_KEY=your-api-key
 VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_ML_API_URL=http://127.0.0.1:5000
+```
+
+**ML API (.env)**:
+```env
+MODEL_PATH=../ml_model/ml_model/
+FLASK_ENV=production
+CORS_ORIGINS=https://your-frontend-domain.com
 ```
 
 ## 🐛 Troubleshooting
@@ -290,10 +409,23 @@ A: Ensure Firebase Authentication is enabled in your Firebase console.
 **Q: Theme not persisting**
 A: Check browser localStorage permissions and clear cache if necessary.
 
+**Q: ML API not connecting**
+A: Ensure the ML API server is running on port 5000 and check CORS settings.
+
+**Q: AI predictions not working**
+A: Check if ML API is running, verify model files exist, and check browser network tab for API errors.
+
+**Q: TensorFlow model loading errors**
+A: Ensure TensorFlow version compatibility and check model file integrity.
+
 ### Debug Mode
 Enable debug logging by adding to your environment:
 ```env
+# Frontend
 VITE_DEBUG=true
+
+# ML API
+FLASK_DEBUG=true
 ```
 
 ## 🤝 Contributing
@@ -316,20 +448,25 @@ We welcome contributions! Please follow these steps:
 ## 📋 Roadmap
 
 ### Upcoming Features
-- [ ] **Budget Setting**: Monthly budget goals and tracking
-- [ ] **Expense Categories**: Custom user-defined categories
+- [ ] **Advanced ML Models**: Deep learning for spending pattern analysis
+- [ ] **Personalized AI**: User-specific model training and predictions
+- [ ] **Budget Setting**: Monthly budget goals and tracking with AI recommendations
+- [ ] **Expense Categories**: Custom user-defined categories with ML categorization
 - [ ] **Data Export**: CSV/PDF export functionality
 - [ ] **Recurring Expenses**: Automated recurring expense tracking
-- [ ] **Expense Photos**: Camera integration for receipt photos
+- [ ] **Expense Photos**: Camera integration for receipt photos with OCR
 - [ ] **Social Features**: Expense sharing and family tracking
-- [ ] **AI Insights**: Smart spending analysis and recommendations
+- [ ] **Enhanced AI Insights**: Advanced spending analysis and recommendations
 - [ ] **Offline Mode**: Progressive Web App with offline support
+- [ ] **Voice Input**: Voice-to-text expense logging
+- [ ] **Predictive Budgeting**: ML-powered budget suggestions
 
 ### Version History
 - **v1.0.0**: Initial release with core features
 - **v1.1.0**: Added gamification system
 - **v1.2.0**: Enhanced UI/UX and theme system
 - **v1.3.0**: Real-time achievements and notifications
+- **v2.0.0**: 🆕 AI Integration with TensorFlow ML predictions
 
 ## 📄 License
 
@@ -339,9 +476,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Firebase Team**: For the excellent backend infrastructure
 - **React Team**: For the amazing frontend framework
+- **TensorFlow Team**: For the powerful machine learning framework
 - **Tailwind CSS**: For the utility-first CSS framework
 - **Recharts**: For beautiful and customizable charts
 - **Vite Team**: For the lightning-fast build tool
+- **Flask Team**: For the lightweight Python web framework
 
 ---
 
@@ -356,9 +495,9 @@ If you encounter any issues or have questions:
 
 ---
 
-**Made with ❤️ for better financial tracking through gamification**
+**Made with ❤️ for better financial tracking through intelligent gamification**
 
-*Transform your expense tracking from a chore into an adventure!* 🎮💰
+*Transform your expense tracking from a chore into an AI-powered adventure!* 🎮💰🚀
 
 ---
 
