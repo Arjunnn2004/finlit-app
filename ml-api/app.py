@@ -113,12 +113,12 @@ class MLModelService:
             features = self.prepare_features(expense_data)
             features_scaled = self.scaler.transform([features])
             
-            # Make prediction
+            # Make prediction using YOUR trained neural network
             prediction = self.model.predict(features_scaled, verbose=0)
-            base_coins = max(1, min(50, int(prediction[0][0])))
+            ann_coins = max(1, min(50, int(prediction[0][0])))
             
-            # Apply intelligent adjustments based on spending patterns
-            final_coins = self.apply_smart_adjustments(expense_data, base_coins)
+            # Apply only minimal adjustments to preserve ANN intelligence
+            final_coins = self.apply_minimal_adjustments(expense_data, ann_coins)
             
             # Calculate confidence based on model uncertainty
             confidence = self.calculate_confidence(features_scaled)
@@ -131,162 +131,81 @@ class MLModelService:
                 "confidence": confidence,
                 "factors": factors,
                 "breakdown": {
-                    "base_prediction": float(prediction[0][0]),
-                    "base_coins": base_coins,
+                    "ann_prediction": float(prediction[0][0]),
+                    "ann_coins": ann_coins,
                     "final_coins": final_coins,
-                    "method": "tensorflow"
+                    "method": "neural_network_primary"
                 }
             }
         except Exception as e:
             print(f"Prediction error: {e}")
             return self.fallback_prediction(expense_data)
     
-    def apply_smart_adjustments(self, expense_data, base_coins):
-        """Apply intelligent adjustments based on spending behavior"""
-        amount = float(expense_data.get('amount', 0))
-        category = expense_data.get('category', 'other')
+    def apply_minimal_adjustments(self, expense_data, ann_coins):
+        """Apply minimal adjustments to preserve ANN intelligence"""
         budget_ratio = expense_data.get('budget_ratio', 0.5)
         
-        # Define category priorities (higher = more essential)
-        category_priorities = {
-            'healthcare': 1.0,     # Essential
-            'education': 0.95,     # Very important
-            'savings': 0.9,        # Very important
-            'food': 0.85,          # Important but can overspend
-            'utilities': 0.8,      # Important
-            'transportation': 0.7,  # Moderately important
-            'other': 0.6,          # Neutral
-            'shopping': 0.4,       # Less important
-            'travel': 0.3,         # Luxury
-            'entertainment': 0.2   # Luxury
-        }
-        
-        category_priority = category_priorities.get(category, 0.5)
-        
-        # Heavy penalty for overspending (budget_ratio > 0.8)
-        if budget_ratio > 1.2:  # Severe overspending
-            overspend_penalty = 0.2
-        elif budget_ratio > 1.0:  # Overspending
-            overspend_penalty = 0.4
-        elif budget_ratio > 0.8:  # Near budget limit
-            overspend_penalty = 0.7
-        else:  # Within budget
-            overspend_penalty = 1.0
-        
-        # Amount-based penalty (larger amounts should be more scrutinized)
-        if amount > 200:
-            amount_penalty = 0.5
-        elif amount > 100:
-            amount_penalty = 0.7
-        elif amount > 50:
-            amount_penalty = 0.9
+        # Only apply adjustment for extreme overspending (let ANN handle most cases)
+        if budget_ratio > 1.5:  # Only for very severe overspending
+            # Slight penalty but trust the ANN mostly
+            adjustment = 0.8
+        elif budget_ratio > 1.2:  # Moderate overspending
+            adjustment = 0.9
         else:
-            amount_penalty = 1.0
+            # Trust the ANN completely for normal spending
+            adjustment = 1.0
         
-        # Combine all factors
-        adjustment_factor = category_priority * overspend_penalty * amount_penalty
+        # Apply minimal adjustment
+        adjusted_coins = int(ann_coins * adjustment)
         
-        # Apply adjustment
-        adjusted_coins = int(base_coins * adjustment_factor)
-        
-        # Ensure minimum coins for any expense (even bad ones get 1 coin)
+        # Ensure we stay in reasonable bounds
         return max(1, min(50, adjusted_coins))
     
+    def apply_smart_adjustments(self, expense_data, base_coins):
+        """Removed - keeping for compatibility but not used"""
+        return base_coins
+    
     def fallback_prediction(self, expense_data):
-        """Improved rule-based fallback when ML model fails"""
+        """Simple fallback only when ANN fails - should rarely be used"""
         try:
             amount = float(expense_data.get('amount', 0))
             category = expense_data.get('category', 'other')
             budget_ratio = expense_data.get('budget_ratio', 0.5)
             
-            # Base coins by category (reflecting importance/necessity)
+            # Simple category-based base coins (since ANN is not available)
             category_base_coins = {
-                'healthcare': 15,      # Essential - high reward
-                'education': 14,       # Very important
-                'savings': 13,         # Very important
-                'food': 10,           # Important but can be overspent
-                'utilities': 12,       # Important necessities
-                'transportation': 8,   # Moderately important
-                'other': 6,           # Neutral
-                'shopping': 4,        # Less important
-                'travel': 3,          # Luxury
-                'entertainment': 2    # Luxury - lowest reward
+                'healthcare': 12, 'education': 11, 'savings': 10,
+                'food': 8, 'utilities': 7, 'transportation': 6,
+                'other': 5, 'shopping': 4, 'travel': 3, 'entertainment': 2
             }
             
-            base_coins = category_base_coins.get(category, 6)
+            base_coins = category_base_coins.get(category, 5)
             
-            # Smart budget-based penalties
-            if budget_ratio > 1.2:
-                # Severe overspending - heavy penalty
-                budget_penalty = 0.15
-                penalty_msg = "severe_overspending"
-            elif budget_ratio > 1.0:
-                # Overspending - significant penalty
-                budget_penalty = 0.3
-                penalty_msg = "overspending"
-            elif budget_ratio > 0.8:
-                # Near limit - moderate penalty
-                budget_penalty = 0.6
-                penalty_msg = "near_budget_limit"
-            elif budget_ratio > 0.6:
-                # Good spending - slight bonus
-                budget_penalty = 1.1
-                penalty_msg = "good_spending"
+            # Simple budget-based adjustment
+            if budget_ratio > 1.0:
+                budget_modifier = 0.5  # Overspending penalty
             else:
-                # Excellent spending - bonus
-                budget_penalty = 1.2
-                penalty_msg = "excellent_spending"
+                budget_modifier = 1.0  # Normal spending
             
-            # Amount-based modifier (larger amounts need more scrutiny)
-            if amount > 200:
-                amount_modifier = 0.4  # Large expense penalty
-            elif amount > 100:
-                amount_modifier = 0.6
-            elif amount > 50:
-                amount_modifier = 0.8
-            elif amount > 20:
-                amount_modifier = 1.0
-            else:
-                amount_modifier = 1.1  # Small expense bonus
-            
-            # Category-specific overspending penalties
-            if budget_ratio > 0.8:
-                if category in ['entertainment', 'travel', 'shopping']:
-                    # Extra penalty for luxury overspending
-                    luxury_penalty = 0.5
-                elif category in ['food']:
-                    # Moderate penalty for food overspending
-                    luxury_penalty = 0.7
-                else:
-                    # Less penalty for essential overspending
-                    luxury_penalty = 0.9
-            else:
-                luxury_penalty = 1.0
-            
-            # Calculate final coins
-            final_coins = int(base_coins * budget_penalty * amount_modifier * luxury_penalty)
+            final_coins = int(base_coins * budget_modifier)
             final_coins = max(1, min(50, final_coins))
             
             return {
                 "coins": final_coins,
-                "confidence": "medium",
+                "confidence": "low",
                 "factors": {
-                    "category_essential": category in ['healthcare', 'education', 'savings', 'utilities'],
-                    "amount_reasonable": amount <= 100,
-                    "within_budget": budget_ratio < 0.8,
-                    "spending_behavior": penalty_msg
+                    "ann_unavailable": True,
+                    "using_fallback": True,
+                    "overspending": budget_ratio > 1.0
                 },
                 "breakdown": {
                     "base_coins": base_coins,
-                    "budget_penalty": budget_penalty,
-                    "amount_modifier": amount_modifier,
-                    "luxury_penalty": luxury_penalty,
-                    "final_coins": final_coins,
-                    "method": "improved_fallback"
+                    "budget_modifier": budget_modifier,
+                    "method": "simple_fallback"
                 }
             }
         except Exception as e:
-            return {"coins": 1, "confidence": "low", "factors": {"error": True}}
+            return {"coins": 1, "confidence": "very_low", "factors": {"error": True}}
     
     def prepare_features(self, expense_data):
         timestamp = datetime.fromisoformat(expense_data['timestamp'].replace('Z', '+00:00'))
