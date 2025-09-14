@@ -195,7 +195,7 @@ export default function ExpenseForm(){
       const currentMonthTotal = currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
       const budgetRatio = (currentMonthTotal + expenseData.amount) / monthlyBudget;
 
-      const response = await fetch('http://localhost:5000/predict-coins', {
+      const response = await fetch('https://finlit-app-production.up.railway.app/predict-coins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
