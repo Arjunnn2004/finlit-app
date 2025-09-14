@@ -34,41 +34,55 @@ class MLModelService:
             # Try multiple approaches to load the model
             print("Attempting to load TensorFlow model...")
             
-            # Approach 1: Load with comprehensive custom objects
+            # Approach 1: Try loading with SavedModel format first
             try:
-                custom_objects = {
-                    'mse': tf.keras.losses.MeanSquaredError(),
-                    'mean_squared_error': tf.keras.losses.MeanSquaredError(),
-                    'mae': tf.keras.metrics.MeanAbsoluteError(),
-                    'mean_absolute_error': tf.keras.metrics.MeanAbsoluteError(),
-                }
-                
-                self.model = keras.models.load_model(
-                    os.path.join(model_path, 'spending_model.h5'), 
-                    custom_objects=custom_objects
-                )
-                print("Model loaded with custom objects approach!")
-                
+                # Check if SavedModel directory exists
+                savedmodel_path = os.path.join(model_path, 'spending_model')
+                if os.path.exists(savedmodel_path):
+                    self.model = tf.keras.models.load_model(savedmodel_path)
+                    print("Model loaded from SavedModel format!")
+                else:
+                    raise FileNotFoundError("SavedModel not found, trying H5")
+                    
             except Exception as e1:
-                print(f"Custom objects approach failed: {e1}")
+                print(f"SavedModel approach failed: {e1}")
                 
-                # Approach 2: Load without compilation and recompile
+                # Approach 2: Load H5 with compatibility settings
                 try:
-                    self.model = keras.models.load_model(
-                        os.path.join(model_path, 'spending_model.h5'), 
-                        compile=False
-                    )
-                    # Recompile the model with standard functions
+                    # Try with safe mode and custom objects
+                    with tf.keras.utils.custom_object_scope({
+                        'mse': tf.keras.losses.MeanSquaredError(),
+                        'mean_squared_error': tf.keras.losses.MeanSquaredError(),
+                        'mae': tf.keras.metrics.MeanAbsoluteError(),
+                        'mean_absolute_error': tf.keras.metrics.MeanAbsoluteError(),
+                    }):
+                        self.model = tf.keras.models.load_model(
+                            os.path.join(model_path, 'spending_model.h5'),
+                            compile=False,
+                            safe_mode=False  # Disable safe mode for compatibility
+                        )
+                    
+                    # Recompile with current TensorFlow version
                     self.model.compile(
                         optimizer='adam',
-                        loss=tf.keras.losses.MeanSquaredError(),
-                        metrics=[tf.keras.metrics.MeanAbsoluteError()]
+                        loss='mse',
+                        metrics=['mae']
                     )
-                    print("Model loaded without compilation and recompiled!")
+                    print("Model loaded with compatibility mode!")
                     
                 except Exception as e2:
-                    print(f"No-compile approach failed: {e2}")
-                    raise e2
+                    print(f"H5 compatibility approach failed: {e2}")
+                    
+                    # Approach 3: Recreate model architecture and load weights
+                    try:
+                        print("Attempting to recreate model architecture...")
+                        self.model = self._create_model_architecture()
+                        self.model.load_weights(os.path.join(model_path, 'spending_model.h5'))
+                        print("Model recreated and weights loaded!")
+                        
+                    except Exception as e3:
+                        print(f"Weight loading approach failed: {e3}")
+                        raise e3
             
             # Load additional model components
             self.scaler = joblib.load(os.path.join(model_path, 'scaler.pkl'))
@@ -79,6 +93,25 @@ class MLModelService:
             print(f"Error loading model: {e}")
             print("Using fallback rule-based system")
             self.model = None
+    
+    def _create_model_architecture(self):
+        """Recreate the model architecture for weight loading"""
+        model = tf.keras.Sequential([
+            tf.keras.layers.Dense(64, activation='relu', input_shape=(8,)),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(16, activation='relu'),
+            tf.keras.layers.Dense(1, activation='linear')
+        ])
+        
+        model.compile(
+            optimizer='adam',
+            loss='mse',
+            metrics=['mae']
+        )
+        
+        return model
     
     def predict_coins(self, expense_data):
         if self.model is None:
