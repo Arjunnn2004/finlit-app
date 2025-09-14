@@ -23,9 +23,9 @@ class MLModelService:
         self.load_model()
     
     def load_model(self):
-        # Get absolute path to the model directory
+        # Get absolute path to the model directory (now inside ml-api)
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(current_dir, '..', 'ml_model', 'ml_model')
+        model_path = os.path.join(current_dir, 'ml_model', 'ml_model')
         
         print(f"Looking for model at: {model_path}")
         print(f"Model files exist: {os.path.exists(os.path.join(model_path, 'spending_model.h5'))}")
