@@ -194,9 +194,10 @@ class MLModelService:
                 "coins": final_coins,
                 "confidence": "low",
                 "factors": {
-                    "ann_unavailable": True,
-                    "using_fallback": True,
-                    "overspending": budget_ratio > 1.0
+                    "category_health": category in ['food', 'healthcare', 'education', 'savings', 'utilities'],
+                    "amount_reasonable": amount < 100,
+                    "time_appropriate": 6 <= datetime.fromisoformat(expense_data['timestamp'].replace('Z', '+00:00')).hour <= 22,
+                    "within_budget": budget_ratio < 0.8
                 },
                 "breakdown": {
                     "base_coins": base_coins,
@@ -205,7 +206,16 @@ class MLModelService:
                 }
             }
         except Exception as e:
-            return {"coins": 1, "confidence": "very_low", "factors": {"error": True}}
+            return {
+                "coins": 1, 
+                "confidence": "very_low", 
+                "factors": {
+                    "category_health": False,
+                    "amount_reasonable": False,
+                    "time_appropriate": False,
+                    "within_budget": False
+                }
+            }
     
     def prepare_features(self, expense_data):
         timestamp = datetime.fromisoformat(expense_data['timestamp'].replace('Z', '+00:00'))
