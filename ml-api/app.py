@@ -23,7 +23,13 @@ class MLModelService:
         self.load_model()
     
     def load_model(self):
-        model_path = '../ml_model/ml_model/'
+        # Get absolute path to the model directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(current_dir, '..', 'ml_model', 'ml_model')
+        
+        print(f"Looking for model at: {model_path}")
+        print(f"Model files exist: {os.path.exists(os.path.join(model_path, 'spending_model.h5'))}")
+        
         try:
             # Try multiple approaches to load the model
             print("Attempting to load TensorFlow model...")
@@ -38,7 +44,7 @@ class MLModelService:
                 }
                 
                 self.model = keras.models.load_model(
-                    f'{model_path}spending_model.h5', 
+                    os.path.join(model_path, 'spending_model.h5'), 
                     custom_objects=custom_objects
                 )
                 print("Model loaded with custom objects approach!")
@@ -49,7 +55,7 @@ class MLModelService:
                 # Approach 2: Load without compilation and recompile
                 try:
                     self.model = keras.models.load_model(
-                        f'{model_path}spending_model.h5', 
+                        os.path.join(model_path, 'spending_model.h5'), 
                         compile=False
                     )
                     # Recompile the model with standard functions
@@ -65,8 +71,8 @@ class MLModelService:
                     raise e2
             
             # Load additional model components
-            self.scaler = joblib.load(f'{model_path}scaler.pkl')
-            self.category_encoder = joblib.load(f'{model_path}category_encoder.pkl')
+            self.scaler = joblib.load(os.path.join(model_path, 'scaler.pkl'))
+            self.category_encoder = joblib.load(os.path.join(model_path, 'category_encoder.pkl'))
             print("Model and components loaded successfully!")
             
         except Exception as e:
