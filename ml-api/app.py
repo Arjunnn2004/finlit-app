@@ -34,55 +34,46 @@ class MLModelService:
             # Try multiple approaches to load the model
             print("Attempting to load TensorFlow model...")
             
-            # Approach 1: Try loading with SavedModel format first
+            # Check what files we have
+            h5_path = os.path.join(model_path, 'spending_model.h5')
+            print(f"H5 file exists: {os.path.exists(h5_path)}")
+            
+            # Approach 1: Load H5 with compatibility settings
             try:
-                # Check if SavedModel directory exists
-                savedmodel_path = os.path.join(model_path, 'spending_model')
-                if os.path.exists(savedmodel_path):
-                    self.model = tf.keras.models.load_model(savedmodel_path)
-                    print("Model loaded from SavedModel format!")
-                else:
-                    raise FileNotFoundError("SavedModel not found, trying H5")
-                    
-            except Exception as e1:
-                print(f"SavedModel approach failed: {e1}")
-                
-                # Approach 2: Load H5 with compatibility settings
-                try:
-                    # Try with safe mode and custom objects
-                    with tf.keras.utils.custom_object_scope({
-                        'mse': tf.keras.losses.MeanSquaredError(),
-                        'mean_squared_error': tf.keras.losses.MeanSquaredError(),
-                        'mae': tf.keras.metrics.MeanAbsoluteError(),
-                        'mean_absolute_error': tf.keras.metrics.MeanAbsoluteError(),
-                    }):
-                        self.model = tf.keras.models.load_model(
-                            os.path.join(model_path, 'spending_model.h5'),
-                            compile=False,
-                            safe_mode=False  # Disable safe mode for compatibility
-                        )
-                    
-                    # Recompile with current TensorFlow version
-                    self.model.compile(
-                        optimizer='adam',
-                        loss='mse',
-                        metrics=['mae']
+                # Try with safe mode disabled and custom objects
+                with tf.keras.utils.custom_object_scope({
+                    'mse': tf.keras.losses.MeanSquaredError(),
+                    'mean_squared_error': tf.keras.losses.MeanSquaredError(),
+                    'mae': tf.keras.metrics.MeanAbsoluteError(),
+                    'mean_absolute_error': tf.keras.metrics.MeanAbsoluteError(),
+                }):
+                    self.model = tf.keras.models.load_model(
+                        h5_path,
+                        compile=False,
+                        safe_mode=False  # Disable safe mode for compatibility
                     )
-                    print("Model loaded with compatibility mode!")
+                
+                # Recompile with current TensorFlow version
+                self.model.compile(
+                    optimizer='adam',
+                    loss='mse',
+                    metrics=['mae']
+                )
+                print("Model loaded with H5 compatibility mode!")
+                
+            except Exception as e1:
+                print(f"H5 compatibility approach failed: {e1}")
+                
+                # Approach 2: Recreate model architecture and load weights
+                try:
+                    print("Attempting to recreate model architecture...")
+                    self.model = self._create_model_architecture()
+                    self.model.load_weights(h5_path)
+                    print("Model recreated and weights loaded!")
                     
                 except Exception as e2:
-                    print(f"H5 compatibility approach failed: {e2}")
-                    
-                    # Approach 3: Recreate model architecture and load weights
-                    try:
-                        print("Attempting to recreate model architecture...")
-                        self.model = self._create_model_architecture()
-                        self.model.load_weights(os.path.join(model_path, 'spending_model.h5'))
-                        print("Model recreated and weights loaded!")
-                        
-                    except Exception as e3:
-                        print(f"Weight loading approach failed: {e3}")
-                        raise e3
+                    print(f"Weight loading approach failed: {e2}")
+                    raise e2
             
             # Load additional model components
             self.scaler = joblib.load(os.path.join(model_path, 'scaler.pkl'))
